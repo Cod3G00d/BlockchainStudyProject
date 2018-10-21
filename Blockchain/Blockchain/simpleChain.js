@@ -12,139 +12,154 @@ const Block = require('./simpleBlock.js');
 
 
 class Blockchain {
-  constructor() {
-    DL.getBlockHeight().then((height) => {
-      if (height == -1) {
-        console.log("Genesis");
-        let newBlock = new Block("First block in the chain - Genesis block");
-        // UTC timestamp
-        newBlock.time = new Date().getTime().toString().slice(0, -3);
-        newBlock.hash = SHA256(JSON.stringify(newBlock)).toString();
-        DL.addDataToBlockchain(newBlock);
-      }
-    });
-  }
+    constructor() {
+        DL.getBlockHeight().then((height) => {
+            if (height == -1) {
+                console.log("Genesis");
+                let newBlock = new Block("First block in the chain - Genesis block");
+                // UTC timestamp
+                newBlock.time = new Date().getTime().toString().slice(0, -3);
+                newBlock.hash = SHA256(JSON.stringify(newBlock)).toString();
+                DL.addDataToBlockchain(newBlock);
+            }
+        });
+    }
 
-  // Add new block
-  addBlock(newBlock) {
-    return new Promise((resolve, reject) => {
-      DL.getBlockHeight().then((height) => {
-        // Block height
-        newBlock.height = height + 1;
-        // UTC timestamp
-        newBlock.time = new Date().getTime().toString().slice(0, -3);
-        // previous block hash
-        if (newBlock.height > -1) {
-          DL.getBlock(height).then((value) => {
-            let preBlock = JSON.parse(value);
-            newBlock.previousBlockHash = preBlock.hash;
-            // Block hash with SHA256 using newBlock and converting to a string
-            newBlock.hash = SHA256(JSON.stringify(newBlock)).toString();
-            // Adding block object to chain
-            DL.addDataToBlockchain(newBlock);
-            resolve(true)
-          }).catch((err) => {
-            console.log(err);
-            reject(err);
-          });
-        }
-      }).catch((err) => {
-        console.log(err);
-        reject(err);
-      });;
-    });
-  }
+    // Add new block
+    addBlock(newBlock) {
+        return new Promise((resolve, reject) => {
+            DL.getBlockHeight().then((height) => {
+                // Block height
+                newBlock.height = height + 1;
+                // UTC timestamp
+                newBlock.time = new Date().getTime().toString().slice(0, -3);
+                // previous block hash
+                if (newBlock.height > -1) {
+                    DL.getBlock(height).then((value) => {
+                        let preBlock = JSON.parse(value);
+                        newBlock.previousBlockHash = preBlock.hash;
+                        // Block hash with SHA256 using newBlock and converting to a string
+                        newBlock.hash = SHA256(JSON.stringify(newBlock)).toString();
+                        // Adding block object to chain
+                        DL.addDataToBlockchain(newBlock);
+                        resolve(true)
+                    }).catch((err) => {
+                        console.log(err);
+                        reject(err);
+                    });
+                }
+            }).catch((err) => {
+                console.log(err);
+                reject(err);
+            });;
+        });
+    }
 
-     // validate block
-     validateBlock(blockHeight) {
-      return new Promise((resolve, reject) => {
-          DL.getBlock(blockHeight).then((value) => {
-              let block = JSON.parse(value);
-              let blockHash = block.hash;
-              block.hash = '';
-              let validBlockHash = SHA256(JSON.stringify(block)).toString();
-              if (blockHash === validBlockHash) {
-                  resolve(true);
-              } else {
-                  console.log('Block #' + blockHeight + ' invalid hash:\n' + blockHash + '<>' + validBlockHash);
-                  resolve(false);
-              }
-          }).catch((err) => {
-              console.log("Error in getBlock at ValidateBlock() " + err);
-              reject(err);
-          });
-      });
-  }
-  validateBlockInChain(blockHeight) {
-      return new Promise((resolve, reject) => {
-          this.validateBlock(blockHeight).then((result) => {
-              if (!result) {
-                  resolve(1);
-              } else {
-                  DL.getBlock(blockHeight).then((value) => {
-                      let blockHash = value.hash;
-                      DL.getBlock(blockHeight + 1).then((valueNext) => {
-                          let previousHash = valueNext.previousBlockHash;
-                          if (blockHash !== previousHash) {
-                              resolve(1);
-                          } else {
-                              resolve(0);
-                          }
-                      }).catch((err) => {
-                          console.log("Error in getNextBlock " + err);
-                          reject(err);
-                      });
-                  }).catch((err) => {
-                      console.log("Error in getBlock " + err);
-                      reject(err);
-                  });
-              };
-          }).catch((err) => {
-              console.log("Error validating block:" + err);
-              reject(err);
-          });
-      })
-  }
+    // validate block
+    validateBlock(blockHeight) {
+        return new Promise((resolve, reject) => {
+            DL.getBlock(blockHeight).then((value) => {
+                let block = JSON.parse(value);
+                let blockHash = block.hash;
+                block.hash = '';
+                let validBlockHash = SHA256(JSON.stringify(block)).toString();
+                if (blockHash === validBlockHash) {
+                    resolve(true);
+                } else {
+                    console.log('Block #' + blockHeight + ' invalid hash:\n' + blockHash + '<>' + validBlockHash);
+                    resolve(false);
+                }
+            }).catch((err) => {
+                console.log("Error in getBlock at ValidateBlock() " + err);
+                reject(err);
+            });
+        });
+    }
+    validateBlockInChain(blockHeight) {
+        return new Promise((resolve, reject) => {
+            DL.getBlockHeight().then((chainHeight) => {
+                this.validateBlock(blockHeight).then((result) => {
+                    console.log(result);
+                    if (!result) {
+                        resolve(1);
+                    } else {
+                        if (chainHeight != blockHeight) {
+                            DL.getBlock(blockHeight).then((value) => {
+                                let blockValue = JSON.parse(value);
+                                let blockHash = blockValue.hash;
+                                DL.getBlock(blockHeight + 1).then((valueNext) => {
+                                    let valueNextValue = JSON.parse(valueNext);
+                                    let previousHash = valueNextValue.previousBlockHash;
 
-  // Validate blockchain
-  validateChain() {
-      return new Promise((resolve, reject) => {
-          DL.getBlockHeight().then((chainHeight) => {
-              var promiseArray = [];
-              for (let i = 0; i < chainHeight; i++) {
-                  // validate block
-                  promiseArray.push(this.validateBlockInChain(i));
-              }
-              Promise.all(promiseArray).then((values) => {
-                  var errBlockTotalNumber = 0;
-                  var errBlocks = [];
-                  for (var i = 0; i < values.length; i++) {
-                      if (values[i] === 1) {
-                          errBlocks.push(i);
-                          errBlockTotalNumber++;
-                      }
-                  }
-                  //let errBlockNumber=values.reduce((a, b) => a + b, 0);
-                  if (errBlockTotalNumber > 0) {
-                      console.log('Block errors = ' + errBlockTotalNumber);
-                      console.log('Err Blocks:' + errBlocks);
-                      resolve('Block errors = ' + errBlockTotalNumber);
-                  } else {
-                      console.log('No errors detected');
-                      resolve('No errors detected');
-                  }
-              }).catch((reason) => {
-                console.log("reason");
-                  console.log(reason);
-                  reject(reason);
-              });
-          }).catch((err) => {
-            console.log("err");
-              console.log(err);
-              reject(err);
-          });
-      })
-  }
+                                    console.log(blockHash + "  " +previousHash);
+                                    if (blockHash !== previousHash) {
+                                        console.log(1);
+                                        resolve(1);
+                                    } else {
+                                        console.log(0);
+                                        resolve(0);
+                                    }
+                                }).catch((err) => {
+                                    console.log("Error in getNextBlock " + err);
+                                    reject(err);
+                                });
+                            }).catch((err) => {
+                                console.log("Error in getBlock " + err);
+                                reject(err);
+                            });
+                        };
+                    }
+                }).catch((err) => {
+                    console.log("Error validating block:" + err);
+                    reject(err);
+                });
+            }).catch((err) => {
+                console.log("Error block heigth:" + err);
+                reject(err);
+            });
+        })
+    }
+
+    // Validate blockchain
+    validateChain() {
+        return new Promise((resolve, reject) => {
+            DL.getBlockHeight().then((chainHeight) => {
+                var promiseArray = [];
+                for (let i = 0; i <= chainHeight; i++) {
+                    // validate block
+                    promiseArray.push(this.validateBlockInChain(i));
+                }
+                Promise.all(promiseArray).then((values) => {
+                    var errBlockTotalNumber = 0;
+                    var errBlocks = [];
+                    for (var i = 0; i < values.length; i++) {
+                        console.log(values);
+                        if (values[i] === 1) {
+                            errBlocks.push(i);
+                            errBlockTotalNumber++;
+                        }
+                    }
+                    //let errBlockNumber=values.reduce((a, b) => a + b, 0);
+                    if (errBlockTotalNumber > 0) {
+                        console.log('Block errors = ' + errBlockTotalNumber);
+                        console.log('Err Blocks:' + errBlocks);
+                        resolve('Block errors = ' + errBlockTotalNumber);
+                    } else {
+                        console.log('No errors detected');
+                        resolve('No errors detected');
+                    }
+                }).catch((reason) => {
+                    console.log("reason");
+                    console.log(reason);
+                    reject(reason);
+                });
+            }).catch((err) => {
+                console.log("err");
+                console.log(err);
+                reject(err);
+            });
+        })
+    }
 }
 
 
@@ -160,14 +175,14 @@ class Blockchain {
 |  ===========================================================================*/
 
 //Blocks
-(function theLoop(i) {
-  let blockchain = new Blockchain();
-  setTimeout(function () {
-    let blockTest = new Block("Test Block - " + (i + 1));
-    blockchain.addBlock(blockTest).then((result) => {
-      console.log(result);
-      i++;
-      if (i < 10) theLoop(i);
-    });
-  }, 100);
-})(0);
+// (function theLoop(i) {
+//     let blockchain = new Blockchain();
+//     setTimeout(function () {
+//         let blockTest = new Block("Test Block - " + (i + 1));
+//         blockchain.addBlock(blockTest).then((result) => {
+//             console.log(result);
+//             i++;
+//             if (i < 10) theLoop(i);
+//         });
+//     }, 100);
+// })(0);
